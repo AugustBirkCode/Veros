@@ -72,12 +72,15 @@ def biogeochemistry(vs):
             vs.temporary_tracers[key][boundary] += value
 
     # How much plankton is blocking light
-    plankton_total = sum([vs.temporary_tracers[plankton] for plankton in vs.plankton_types]) * vs.dzt
+    # plankton_total = sum([vs.temporary_tracers[plankton] for plankton in vs.plankton_types]) * vs.dzt
+    plankton_total = sum([tracer * tracer.light_attenuation if hasattr(tracer, "light_attenuation")
+                          for tracer in vs.temporary_tracers.values()]) * vs.dzt
 
     # Integrated phytplankton - starting from top of layer going upwards
     # reverse cumulative sum because our top layer is the last.
     # Needs to be reversed again to reflect direction
-    phyto_integrated = np.empty_like(vs.temporary_tracers["phytoplankton"])
+    # phyto_integrated = np.empty_like(vs.temporary_tracers["phytoplankton"])
+    phyto_integrated = np.empty_like(next(iter(vs.temporary_tracers.values)))  # Make no assumption about content
     phyto_integrated[:, :, :-1] = plankton_total[:, :, 1:]
     phyto_integrated[:, :, -1] = 0.0
 
@@ -153,7 +156,7 @@ def biogeochemistry(vs):
                 # Amount of exported material is determined by cell z-height and sinking speed
                 # amount falling through bottom is removed and remineralized later
                 # impo is import from layer above. Only used to calculate difference
-                export[sinker] = flags[tracer] * data.sinking_speed * vs.temporary_tracers[sinker] / vs.dzt
+                export[tracer] = flags[tracer] * data.sinking_speed * data / vs.dzt
                 bottom_export[tracer] = export[tracer] * vs.bottom_mask
 
                 impo[tracer] = np.empty_like(export[tracer])
