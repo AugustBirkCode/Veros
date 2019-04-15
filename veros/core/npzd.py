@@ -131,7 +131,8 @@ def biogeochemistry(vs):
     for _ in range(nbio):
 
         # Plankton is recycled, dying and growing
-        for plankton in vs.plankton_types:
+        # for plankton in vs.plankton_types:
+        for plankton in vs.liminting_functions:
 
             # Nutrient limiting growth - if no limit, growth is determined by avej
             u = 1
@@ -518,29 +519,29 @@ def setup_basic_npzd_rules(vs):
     # if not vs.enable_nitrogen:
     #     register_npzd_rule(vs, primary_production, "po4", "phytoplankton", label="Primary production")
     register_npzd_rule(vs, "npzd_basic_phytoplankton_grazing",
-            (grazing, "phytoplankton", "zooplankton"), label="Grazing")
+                       (grazing, "phytoplankton", "zooplankton"), label="Grazing")
     register_npzd_rule(vs, "npzd_basic_phytoplankton_mortality",
-            (mortality, "phytoplankton", "detritus"), label="Mortality")
+                       (mortality, "phytoplankton", "detritus"), label="Mortality")
     register_npzd_rule(vs, "npzd_basic_phytoplankton_sloppy_feeding",
-            (sloppy_feeding, "phytoplankton", "detritus"), label="Sloppy feeding")
+                       (sloppy_feeding, "phytoplankton", "detritus"), label="Sloppy feeding")
     register_npzd_rule(vs, "npzd_basic_phytoplankton_fast_recycling",
-            (recycling_to_po4, "phytoplankton", "po4"), label="Fast recycling")
+                       (recycling_to_po4, "phytoplankton", "po4"), label="Fast recycling")
     register_npzd_rule(vs, "npzd_basic_zooplankton_grazing",
-            (zooplankton_self_grazing, "zooplankton", "zooplankton"), label="Grazing")
+                       (zooplankton_self_grazing, "zooplankton", "zooplankton"), label="Grazing")
     register_npzd_rule(vs, "npzd_basic_zooplankton_excretion",
-            (excretion, "zooplankton", "po4"), label="Excretion")
+                       (excretion, "zooplankton", "po4"), label="Excretion")
     register_npzd_rule(vs, "npzd_basic_zooplankton_mortality",
-            (mortality, "zooplankton", "detritus"), label="Mortality")
+                       (mortality, "zooplankton", "detritus"), label="Mortality")
     register_npzd_rule(vs, "npzd_basic_zooplankton_sloppy_feeding",
-            (sloppy_feeding, "zooplankton", "detritus"), label="Sloppy feeding")
+                       (sloppy_feeding, "zooplankton", "detritus"), label="Sloppy feeding")
     register_npzd_rule(vs, "npzd_basic_detritus_sloppy_feeding",
-            (sloppy_feeding, "detritus", "detritus"), label="Sloppy feeding")
+                       (sloppy_feeding, "detritus", "detritus"), label="Sloppy feeding")
     register_npzd_rule(vs, "npzd_basic_detritus_grazing",
-            (grazing, "detritus", "zooplankton"), label="Grazing")
+                       (grazing, "detritus", "zooplankton"), label="Grazing")
     register_npzd_rule(vs, "npzd_basic_detritus_remineralization",
-            (recycling_to_po4, "detritus", "po4"), label="Remineralization")
+                       (recycling_to_po4, "detritus", "po4"), label="Remineralization")
     register_npzd_rule(vs, "npzd_basic_phytoplankton_primary_production",
-            (primary_production, "po4", "phytoplankton"), label="Primary production")
+                       (primary_production, "po4", "phytoplankton"), label="Primary production")
 
     register_npzd_rule(vs, "group_npzd_basic", [
         "npzd_basic_phytoplankton_grazing",
