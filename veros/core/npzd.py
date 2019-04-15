@@ -8,6 +8,40 @@ from .. import time
 from . import diffusion, thermodynamics, cyclic, utilities, isoneutral
 
 
+class NPZD_tracer(np.ndarray):
+    """
+    Class for npzd tracers to store additional information
+    about themselves.
+    Inhenrits from numpy.ndarray to make it work seamless with the current setup
+    Work in progress
+
+    Transport: Whether to transport the tracer
+    sinking_speed: If set the tracer will sink at the given speed
+    light_attenuation: If set the tracer will block light as the light_attenuation * concentration
+    recycling_rate: Rate to recycle the tracer at
+    mortality_rate: Rate at which the tracer is dying
+    """
+
+    def __new__(cls, input_array, sinking_speed=None, light_attenuation=None, transport=True,
+                recycling_rate=None, mortality_rate=None):
+        obj = np.asarray(input_array).view(cls)
+        if sinking_speed is not None:
+            obj.sinking_speed = sinking_speed
+        if light_attenuation is not None:
+            obj.light_attenuation = light_attenuation
+        if recycling_rate is not None:
+            obj.recycling_rate = recycling_rate
+        if mortality_rate is not None:
+            obj.mortality_rate = mortality_rate
+        obj.transport = transport
+
+        return obj
+
+    def __array_finalize__(self, obj):
+        if obj is None:
+            return
+
+
 @veros_method
 def biogeochemistry(vs):
     """
@@ -53,7 +87,6 @@ def biogeochemistry(vs):
     bottom_export = {}
     impo = {}
     import_minus_export = {}
-
 
     # incomming shortwave radiation at top layer
     swr = vs.swr[:, :, np.newaxis] * np.exp(-vs.light_attenuation_phytoplankton
@@ -106,41 +139,36 @@ def biogeochemistry(vs):
             vs.net_primary_production[plankton] = flags[plankton] * flags["po4"]\
                 * np.minimum(avej[plankton], u * jmax[plankton]) * vs.temporary_tracers[plankton]
 
-            # Fast recycling of plankton
-            vs.recycled[plankton] = flags[plankton] * vs.recycling_rates[plankton] * bct\
-                * vs.temporary_tracers[plankton]
+        for tracer, data in vs.npzd_tracers.items():
+            if hasattr(data, "recycling_rate"):
+                vs.recycled[tracer] = flags[tracer] * data.recycling_rate * bct \
+                                      * vs.temporary_tracers[tracer]
 
-            # Mortality of plankton
-            vs.mortality[plankton] = flags[plankton] * vs.mortality_rates[plankton]\
-                * vs.temporary_tracers[plankton]
+            if hasattr(data, "mortality_rate"):
+                vs.mortality[tracer] = flags[tracer] * data.mortality_rate \
+                                       * vs.temporary_tracers[tracer]
 
+            if hasattr(data, "sinking_speed"):
+                # Fetch exported sinking material and calculate difference between layers
+                # Amount of exported material is determined by cell z-height and sinking speed
+                # amount falling through bottom is removed and remineralized later
+                # impo is import from layer above. Only used to calculate difference
+                export[sinker] = flags[tracer] * data.sinking_speed * vs.temporary_tracers[sinker] / vs.dzt
+                bottom_export[tracer] = export[tracer] * vs.bottom_mask
 
-        # Detritus is recycled
-        vs.recycled["detritus"] = flags["detritus"] * vs.recycling_rates["detritus"] * bct\
-            * vs.temporary_tracers["detritus"]
+                impo[tracer] = np.empty_like(export[tracer])
+                impo[tracer][:, :, -1] = 0
+                impo[tracer][:, :, :-1] = export[tracer][:, :, 1:] * (vs.dzt[1:] / vs.dzt[:-1])
+
+                import_minus_export[tracer] = impo[tracer] - export[tracer]
 
         # zooplankton displays quadric mortality rates
-        vs.mortality["zooplankton"] = flags["zooplankton"] * vs.quadric_mortality_zooplankton\
-            * vs.temporary_tracers["zooplankton"] ** 2
+        vs.mortality["zooplankton"][...] *= vs.temporary_tracers["zooplankton"]
 
         # TODO: move these to rules except grazing
         vs.grazing, vs.digestion, vs.excretion, vs.sloppy_feeding = \
             zooplankton_grazing(vs, vs.temporary_tracers, flags, gmax)
         vs.excretion_total = sum(vs.excretion.values())
-
-        # Fetch exported sinking material and calculate difference between layers
-        # Amount of exported material is determined by cell z-height and sinking speed
-        # amount falling through bottom is removed and remineralized later
-        # impo is import from layer above. Only used to calculate difference
-        for sinker, speed in vs.sinking_speeds.items():
-            export[sinker] = speed * vs.temporary_tracers[sinker] * flags[sinker] / vs.dzt
-            bottom_export[sinker] = export[sinker] * vs.bottom_mask
-
-            impo[sinker] = np.empty_like(export[sinker])
-            impo[sinker][:, :, -1] = 0
-            impo[sinker][:, :, :-1] = export[sinker][:, :, 1:] * (vs.dzt[1:] / vs.dzt[:-1])
-
-            import_minus_export[sinker] = impo[sinker] - export[sinker]
 
         # Gather all state updates
         npzd_updates = [(rule[0](vs, rule[1], rule[2]), rule[4]) for rule in vs.npzd_rules]
@@ -148,11 +176,11 @@ def biogeochemistry(vs):
         # perform updates
         for update, boundary in npzd_updates:
             for key, value in update.items():
-                # vs.temporary_tracers[key][:, :, :] += value * vs.dt_bio
                 vs.temporary_tracers[key][boundary] += value * vs.dt_bio
 
         # Import and export between layers
-        for tracer in vs.sinking_speeds:
+        # for tracer in vs.sinking_speeds:
+        for tracer in import_minus_export:
             vs.temporary_tracers[tracer][:, :, :] += import_minus_export[tracer] * vs.dt_bio
 
         # Prepare temporary tracers for next bio iteration
@@ -330,8 +358,10 @@ def register_npzd_data(vs, name, value, transport=True, vmin=None, vmax=None):
 
     vs.npzd_tracers[name] = value
 
-    if transport:
-        vs.npzd_transported_tracers.append(name)
+    if value.transport:
+        vs.npzd_transpoort_tracers.append(name)
+    # if transport:
+    #     vs.npzd_transported_tracers.append(name)
 
 
 @veros_method
@@ -437,23 +467,36 @@ def setup_basic_npzd_rules(vs):
     vs.sinking_speeds["detritus"] = (vs.wd0 + vs.mw * np.where(-zw < vs.mwz, -zw, vs.mwz)) \
         * vs.maskT
 
+    phytoplankton = NPZD_tracer(vs.phytoplankton,
+                                recycling_rate=vs.nupt0,
+                                mortality_rate=vs.specific_mortality_phytoplankton,
+                                light_attenuation=vs.light_attenuation_phytoplankton)
+
+    detritus = NPZD_tracer(vs.detritus,
+                           recycling_rate=vs.nud0,
+                           sinking_speed=vs.sinking_speeds["detritus"])
+
+    zooplankton = NPZD_tracer(vs.zooplankton,
+                              mortality_rate=vs.specific_mortality_phytoplankton)
+    po4 = NPZD_tracer(vs.po4)
+
     # Add "regular" phytoplankton to the model
-    vs.plankton_types = ["phytoplankton"]  # Phytoplankton types in the model. For blocking light
+    # vs.plankton_types = ["phytoplankton"]  # Phytoplankton types in the model. For blocking light
     vs.plankton_growth_functions["phytoplankton"] = phytoplankton_potential_growth
     vs.limiting_functions["phytoplankton"] = [phosphate_limitation_phytoplankton]
-    vs.recycling_rates["phytoplankton"] = vs.nupt0
-    vs.recycling_rates["detritus"] = vs.nud0
-    vs.mortality_rates["phytoplankton"] = vs.specific_mortality_phytoplankton
+    # vs.recycling_rates["phytoplankton"] = vs.nupt0
+    # vs.recycling_rates["detritus"] = vs.nud0
+    # vs.mortality_rates["phytoplankton"] = vs.specific_mortality_phytoplankton
 
     # Zooplankton preferences for grazing on keys
     # Values are scaled automatically at the end of this function
     vs.zprefs = {"phytoplankton": vs.zprefP, "zooplankton": vs.zprefZ, "detritus": vs.zprefDet}
 
     # Register for basic model
-    register_npzd_data(vs, "detritus", vs.detritus)
-    register_npzd_data(vs, "phytoplankton", vs.phytoplankton)
-    register_npzd_data(vs, "zooplankton", vs.zooplankton)
-    register_npzd_data(vs, "po4", vs.po4)
+    register_npzd_data(vs, "detritus", detritus)
+    register_npzd_data(vs, "phytoplankton", phytoplankton)
+    register_npzd_data(vs, "zooplankton", zooplankton)
+    register_npzd_data(vs, "po4", po4)
 
     # Describe interactions between elements in model
     # function describing interaction, from, to, description for graph
@@ -540,12 +583,14 @@ def setup_carbon_npzd_rules(vs):
     vs.rcak[...] *= vs.maskT
 
     # Need to track dissolved inorganic carbon, alkalinity
-    register_npzd_data(vs, "DIC", vs.dic)
-    register_npzd_data(vs, "alkalinity", vs.alkalinity)
+    dic = NPZD_tracer(vs.dic)
+    alkalinity = NPZD_tracer(vs.alkalinity)
+    register_npzd_data(vs, "DIC", dic)
+    register_npzd_data(vs, "alkalinity", alkalinity)
 
     if not vs.enable_calcifiers:
         # Only for collection purposes - to be redistributed in post rules
-        register_npzd_data(vs, "caco3", np.zeros_like(vs.dic), transport=False)
+        register_npzd_data(vs, "caco3", NPZD_tracer(np.zeros_like(vs.dic), transport=False))
 
     # Exchange of CO2 with the atmosphere
     # register_npzd_pre_rule(vs, co2_surface_flux, "co2", "DIC", boundary="SURFACE")
@@ -709,7 +754,6 @@ def setupNPZD(vs):
     # case you should ensure, it is updated or reset appropriately using pre and post rules
     vs.npzd_transported_tracers = []
 
-
     # Temporary storage of mortality and recycled - to be used in rules
     vs.net_primary_production = {}
     vs.recycled = {}
@@ -718,9 +762,9 @@ def setupNPZD(vs):
     vs.plankton_growth_functions = {}  # Contains functions describing growth of plankton
     vs.limiting_functions = {}  # Contains descriptions of how nutrients put a limit on growth
 
-    vs.sinking_speeds = {}  # Dictionary of sinking objects with their sinking speeds
-    vs.recycling_rates = {}
-    vs.mortality_rates = {}
+    # vs.sinking_speeds = {}  # Dictionary of sinking objects with their sinking speeds
+    # vs.recycling_rates = {}
+    # vs.mortality_rates = {}
 
     setup_basic_npzd_rules(vs)
 
@@ -747,6 +791,15 @@ def setupNPZD(vs):
     # vs.npzd_selected_rules = ["group_npzd_basic", "group_carbon_implicit_caco3"]
     for rule in vs.npzd_selected_rules:
         select_npzd_rule(vs, rule)
+
+    # for tracer, data in vs.npzd_tracers.items():
+    #     # TODO remove this and check directly in calculations
+    #     if hasattr(data, "recycling_rate"):
+    #         vs.recycling_rates[tracer] = data.recycling_rate
+    #     if hasattr(data, "mortality_rate"):
+    #         vs.mortality_rates[tracer] = data.mortality_rate
+    #     if hasattr(data, "sinking_speed"):
+    #         vs.sinking_speeds[tracer] = data.sinking_speed
 
     # Update Zooplankton preferences dynamically
     zprefsum = sum(vs.zprefs.values())
