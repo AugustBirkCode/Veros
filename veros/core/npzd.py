@@ -66,7 +66,7 @@ class Plankton(Recyclable_tracer):
         return self * self.mortality_rate
 
 
-class Zooplankton(plankton):
+class Zooplankton(Plankton):
     """
     Zooplankton displays quadratic mortality rate but otherwise is similar to ordinary phytoplankton
     """
@@ -105,7 +105,7 @@ def biogeochemistry(vs):
             vs.temporary_tracers[key][boundary] += value
 
     # How much plankton is blocking light
-    plankton_total = sum([tracer * tracer.light_attenuation if hasattr(tracer, "light_attenuation")
+    plankton_total = sum([tracer * tracer.light_attenuation if hasattr(tracer, "light_attenuation") else 0
                           for tracer in vs.temporary_tracers.values()]) * vs.dzt
 
     # Integrated phytplankton within one layer
