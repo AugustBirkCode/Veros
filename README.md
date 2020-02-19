@@ -54,7 +54,7 @@ quality)
 
 ## Features
 
-Veros provides
+Veros provides:
 
 -   a fully staggered **3-D grid geometry** (*C-grid*)
 -   support for both **idealized and realistic configurations** in
