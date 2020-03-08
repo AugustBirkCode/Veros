@@ -17,7 +17,7 @@
   </a>
 </p>
 
-Veros, the crazy ass *versatile ocean simulator*, is just that: A powerful tool
+Veros, the *versatile ocean simulator*, is just that: A powerful tool
 that makes high-performance ocean modeling approachable and fun. Since
 it is a pure Python module, the days of struggling with complicated
 model setup workflows, ancient programming environments, and obscure
