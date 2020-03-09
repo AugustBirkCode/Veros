@@ -18,7 +18,7 @@ class ACCSectorSetup(VerosSetup):
     This setup demonstrates:
      - setting up an idealized geometry after `(Munday et al., 2013) <https://doi.org/10.1175/JPO-D-12-095.1>`_.
      - modifing surface forcings over selected regions of the domain
-     - sensitivity of circumpolar transport and meridional overturning 
+     - sensitivity of circumpolar transport and meridional overturning
        to changes in Southern Ocean wind stress and buoyancy anomalies
      - basic usage of diagnostics
 

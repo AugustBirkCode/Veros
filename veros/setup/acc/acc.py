@@ -156,4 +156,4 @@ def run(*args, **kwargs):
 
 
 if __name__ == '__main__':
-    run()
+    run([1,2,3],0,0,0)
